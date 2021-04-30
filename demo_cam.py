@@ -5,7 +5,7 @@ from libFaceRecog import FACE_RECOG
 from PIL import ImageFont, ImageDraw, Image
 import numpy as np
 
-remake_db = False
+remake_db = True
 facenet_model_path = 'models/facenet_keras_weights.h5'
 embedding_db_path = 'embeddings/'
 faces_images_db_source = 'Faces/'
@@ -44,15 +44,14 @@ if __name__ == "__main__":
     while cap.isOpened():
         ret,frame = cap.read()
 
-        face_names = FACE.recognize_knn(embedding_db_path, frame, onlyone=onlyone)
-        print('FACE.recog_name_list', FACE.recog_name_list)
+        #face_names = FACE.recognize_knn(embedding_db_path, frame, threshold=recog_threshold, onlyone=onlyone)
+        face_names = FACE.recognize(frame,recog_threshold)
 
         for data in face_names:
-            print(data)
+            print('data', data)
             fname = data[0]
             diff = data[1]
             bbox = data[2]
-
 
         fname = ''
         if onlyone is True:
@@ -60,22 +59,9 @@ if __name__ == "__main__":
                 fname = max(FACE.recog_name_list ,key=FACE.recog_name_list.count)
 
         if len(fname)>0:
-            #cv2.putText(frame, fname + ':' + str(round(diff,3)), (bbox[0],bbox[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 1.2,  (0,255,0), 3, cv2.LINE_AA)
             frame = printText(frame, fname + ':' + str(round(diff,3)), color=(0,255,0,0), size=1.25, pos=(bbox[0],bbox[1]-30), type="Chinese")
-        '''
-        for data in face_names:
-            print(data)
-            fname = data[0]
-            diff = data[1]
-            bbox = data[2]
-            cv2.putText(frame, fname + ':' + str(round(diff,3)), (bbox[0],bbox[1]-10), cv2.FONT_HERSHEY_SIMPLEX, 1.2,  (0,255,0), 3, cv2.LINE_AA)
-        '''
-        '''
-        face_names = FACE.recognize(cv2.imread('test.jpg'),recog_threshold)
 
-        for [name, fimg, fbox] in face_names:
-            print(name, fbox)
-        '''
+
         cv2.imshow('test', frame)
         cv2.waitKey(1)
 

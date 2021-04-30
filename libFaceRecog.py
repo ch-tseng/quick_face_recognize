@@ -138,7 +138,7 @@ class FACE_RECOG:
 
         return min_diff
 
-    def recognize_knn(self, db_path, img, onlyone=True):
+    def recognize_knn(self, db_path, img, threshold, onlyone=True):
         clf = load(os.path.join(db_path, 'knn_faces.joblib'))
         face_encoder = self.face_encoder
         faces_data = self.get_faces(img=img)
@@ -154,34 +154,37 @@ class FACE_RECOG:
         for id, [fbox, fimg] in enumerate(faces_data):
             if (onlyone is True and id==0) or (onlyone is False):
                 encode = self.get_embeddings(fimg)
+                #encode = self.l2_normalizer.transform(encode.reshape(1, -1))[0]
                 pred = clf.predict( np.array([encode]) )
-                preds.append(pred[0])
-                diffs.append(self.embedding_compare(encode, pred[0]))
-                boxes.append(fbox)
+                diff = self.embedding_compare(encode, pred[0])
+                if diff<threshold:
+                    preds.append(pred[0])
+                    diffs.append(diff)
+                    boxes.append(fbox)
 
-                self.last_recog_time = time.time()
-                self.recog_name_list.append(pred[0])
-                if len(self.recog_name_list)>self.recog_group_max: self.recog_name_list.pop(0)
+                    self.last_recog_time = time.time()
+                    self.recog_name_list.append(pred[0])
+                    if len(self.recog_name_list)>self.recog_group_max: self.recog_name_list.pop(0)
 
-                print('test', self.recog_name_list)
+                    print('test', self.recog_name_list)
 
         return zip(preds, diffs, boxes)
 
     def recognize(self, img, threshold, onlyone=True):
         face_encoder = self.face_encoder
         faces_data = self.get_faces(img=img)
-
-        names, face_imgs, face_boxes = [], [], []
+        names, diffs, face_boxes = [], [], []
         if(time.time() - self.last_recog_time > self.clear_recog_max_time):
             self.recog_name_list = []
-        for [fbox, fimg] in faces_data:
+
+        for id, [fbox, fimg] in enumerate(faces_data):
             if (onlyone is True and id==0) or (onlyone is False):
                 encode = self.get_embeddings(fimg)
-                encode = self.l2_normalizer.transform(encode.reshape(1, -1))[0]
+                #encode = self.l2_normalizer.transform(encode.reshape(1, -1))[0]
                 name = 'unknown'
 
                 distance = float("inf")
-                #print('test', len(self.embedding_dict))
+                print('embedding_dict', len(self.embedding_dict))
                 for db_name, db_encode in self.embedding_dict.items():
                     dist = cosine(db_encode, encode)
                     print(db_name, dist)
@@ -190,14 +193,14 @@ class FACE_RECOG:
                         distance = dist
 
                 names.append(name)
-                face_imgs.append(fimg)
+                diffs.append(distance)
                 face_boxes.append(fbox)
 
                 self.last_recog_time = time.time()
-                self.recog_name_list.append(pred[0])
+                self.recog_name_list.append(name)
                 if len(self.recog_name_list)>self.recog_group_max: self.recog_name_list.pop(0)
 
-        return zip(names, face_imgs, face_boxes)
+        return zip(names, diffs, face_boxes)
 
 
     def make_db(self, faces_path, db_path):
@@ -224,7 +227,6 @@ class FACE_RECOG:
                 img_BGR = cv2.imread(image_path)
                 faces_data = self.get_faces(img=img_BGR)
 
-                #[box, fimg] = faces_data[0]
                 for fid, [box, fimg] in enumerate(faces_data):
                     if fid == 0:
                         cv2.imwrite(os.path.join(db_path, face_names+'_'+str(id)+'.jpg'), fimg)
@@ -233,10 +235,9 @@ class FACE_RECOG:
                         knnencodes.append(encode)
                         names.append(face_names)
 
-            #print('test2', len(encodes))
             if encodes:
                 encode = np.sum(encodes, axis=0 )
-                encode = self.l2_normalizer.transform(np.expand_dims(encode, axis=0))[0]
+                #encode = self.l2_normalizer.transform(np.expand_dims(encode, axis=0))[0]
                 encoding_dict[face_names] = encode
 
         path = os.path.join(db_path,'encodings.pkl')
