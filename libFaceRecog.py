@@ -21,6 +21,11 @@ class FACE_RECOG:
         self.face_encoder.load_weights(facenet_path)
         self.l2_normalizer = Normalizer('l2')
 
+        self.last_recog_time = 0.0
+        self.recog_group_max = 5
+        self.recog_name_list = []
+        self.clear_recog_max_time = 3  #seconds
+
     def normalize(self, img):
         mean, std = img.mean(), img.std()
         return (img - mean) / std
@@ -71,6 +76,7 @@ class FACE_RECOG:
             if fw<self.required_shape[0] and fh<self.required_shape[1]:
                 continue
 
+            #bboxes.append(face_info['box'])
             keypoints = face_info['keypoints']
             if self.good_gesture(keypoints) is True:
                 pad = int(fh/4)
@@ -95,7 +101,8 @@ class FACE_RECOG:
                 if len(aligned_result)>0:
                     aligned_bbox = aligned_result[0]['box']
                     ax,ay,aw,ah = aligned_bbox[0], aligned_bbox[1], aligned_bbox[2], aligned_bbox[3]
-                    bboxes.append(aligned_bbox)
+                    #bboxes.append(aligned_bbox)
+                    bboxes.append(face_info['box'])
                     fimages.append( aligned_img[ay:ay+ah, ax:ax+aw] )
 
         return zip(bboxes, fimages)
@@ -131,46 +138,64 @@ class FACE_RECOG:
 
         return min_diff
 
-    def recognize_knn(self, db_path, img):
+    def recognize_knn(self, db_path, img, onlyone=True):
         clf = load(os.path.join(db_path, 'knn_faces.joblib'))
         face_encoder = self.face_encoder
         faces_data = self.get_faces(img=img)
+        #if onlyone is True and len(faces_data)>1:
+        #    return []
 
+        boxes = []
         preds = []
         diffs = []
-        for [fbox, fimg] in faces_data:
-            encode = self.get_embeddings(fimg)
-            pred = clf.predict( np.array([encode]) )
-            preds.append(pred[0])
-            diffs.append(self.embedding_compare(encode, pred[0]))
+        if(time.time() - self.last_recog_time > self.clear_recog_max_time):
+            self.recog_name_list = []
 
-        return zip(preds, diffs)
+        for id, [fbox, fimg] in enumerate(faces_data):
+            if (onlyone is True and id==0) or (onlyone is False):
+                encode = self.get_embeddings(fimg)
+                pred = clf.predict( np.array([encode]) )
+                preds.append(pred[0])
+                diffs.append(self.embedding_compare(encode, pred[0]))
+                boxes.append(fbox)
 
-    def recognize(self, img, threshold):
+                self.last_recog_time = time.time()
+                self.recog_name_list.append(pred[0])
+                if len(self.recog_name_list)>self.recog_group_max: self.recog_name_list.pop(0)
+
+                print('test', self.recog_name_list)
+
+        return zip(preds, diffs, boxes)
+
+    def recognize(self, img, threshold, onlyone=True):
         face_encoder = self.face_encoder
         faces_data = self.get_faces(img=img)
 
         names, face_imgs, face_boxes = [], [], []
+        if(time.time() - self.last_recog_time > self.clear_recog_max_time):
+            self.recog_name_list = []
         for [fbox, fimg] in faces_data:
-            encode = self.get_embeddings(fimg)
-            encode = self.l2_normalizer.transform(encode.reshape(1, -1))[0]
-            name = 'unknown'
+            if (onlyone is True and id==0) or (onlyone is False):
+                encode = self.get_embeddings(fimg)
+                encode = self.l2_normalizer.transform(encode.reshape(1, -1))[0]
+                name = 'unknown'
 
-            distance = float("inf")
-            #print('test', len(self.embedding_dict))
-            for db_name, db_encode in self.embedding_dict.items():
-                dist = cosine(db_encode, encode)
-                print(db_name, dist)
-                if dist < threshold and dist < distance:
-                    name = db_name
-                    distance = dist
+                distance = float("inf")
+                #print('test', len(self.embedding_dict))
+                for db_name, db_encode in self.embedding_dict.items():
+                    dist = cosine(db_encode, encode)
+                    print(db_name, dist)
+                    if dist < threshold and dist < distance:
+                        name = db_name
+                        distance = dist
 
-            names.append(name)
-            face_imgs.append(fimg)
-            face_boxes.append(fbox)
+                names.append(name)
+                face_imgs.append(fimg)
+                face_boxes.append(fbox)
 
-            #cv2.imshow('test', fimg)
-            #cv2.waitKey(0)
+                self.last_recog_time = time.time()
+                self.recog_name_list.append(pred[0])
+                if len(self.recog_name_list)>self.recog_group_max: self.recog_name_list.pop(0)
 
         return zip(names, face_imgs, face_boxes)
 
@@ -190,6 +215,9 @@ class FACE_RECOG:
 
             id = 0
             for image_name in os.listdir(person_dir):
+                if image_name[-3:] not in ['jpg', 'png', 'peg']:
+                    continue
+
                 id += 1
                 image_path = os.path.join(person_dir,image_name)
 
