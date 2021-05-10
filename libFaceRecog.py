@@ -154,7 +154,7 @@ class FACE_RECOG:
         for id, [fbox, fimg] in enumerate(faces_data):
             if (onlyone is True and id==0) or (onlyone is False):
                 encode = self.get_embeddings(fimg)
-                #encode = self.l2_normalizer.transform(encode.reshape(1, -1))[0]
+                encode = self.l2_normalizer.transform(encode.reshape(1, -1))[0]
                 pred = clf.predict( np.array([encode]) )
                 diff = self.embedding_compare(encode, pred[0])
                 if diff<threshold:
@@ -210,12 +210,11 @@ class FACE_RECOG:
             os.makedirs(db_path)
 
         encoding_dict = dict()
-        encodes = []
         names = []
         knnencodes = []
         for face_names in tqdm(os.listdir(faces_path)):
             person_dir = os.path.join(faces_path,face_names)
-
+            encodes = []
             id = 0
             for image_name in os.listdir(person_dir):
                 if image_name[-3:] not in ['jpg', 'png', 'peg']:

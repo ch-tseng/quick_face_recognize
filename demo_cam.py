@@ -5,7 +5,7 @@ from libFaceRecog import FACE_RECOG
 from PIL import ImageFont, ImageDraw, Image
 import numpy as np
 
-remake_db = True
+remake_db = False
 facenet_model_path = 'models/facenet_keras_weights.h5'
 embedding_db_path = 'embeddings/'
 faces_images_db_source = 'Faces/'
@@ -41,9 +41,10 @@ if __name__ == "__main__":
 
 
     cap = cv2.VideoCapture(0)
+    i = 0
     while cap.isOpened():
         ret,frame = cap.read()
-
+        #frame_source = frame.copy()
         #face_names = FACE.recognize_knn(embedding_db_path, frame, threshold=recog_threshold, onlyone=onlyone)
         face_names = FACE.recognize(frame,recog_threshold)
 
@@ -61,7 +62,8 @@ if __name__ == "__main__":
         if len(fname)>0:
             frame = printText(frame, fname + ':' + str(round(diff,3)), color=(0,255,0,0), size=1.25, pos=(bbox[0],bbox[1]-30), type="Chinese")
 
-
+        i += 1
         cv2.imshow('test', frame)
+        #cv2.imwrite('me'+str(i) + '.jpg', frame_source)
         cv2.waitKey(1)
 
